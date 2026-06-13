@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       response.cookies.set('sb-user-id', adminId, { httpOnly: true, path: '/' });
       response.cookies.set('sb-user-role', 'admin', { httpOnly: true, path: '/' });
       response.cookies.set('sb-user-name', name, { httpOnly: true, path: '/' });
+      response.cookies.set('sb-user-email', 'admin@gmail.com', { httpOnly: true, path: '/' });
 
       return response;
     }
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
     response.cookies.set('sb-user-id', authData.user.id, { httpOnly: true, path: '/' });
     response.cookies.set('sb-user-role', role, { httpOnly: true, path: '/' });
     response.cookies.set('sb-user-name', name, { httpOnly: true, path: '/' });
+    response.cookies.set('sb-user-email', email.toLowerCase(), { httpOnly: true, path: '/' });
 
     return response;
   } catch (err: any) {

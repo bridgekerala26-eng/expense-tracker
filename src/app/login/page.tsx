@@ -82,7 +82,7 @@ export default function LoginPage() {
               type="email"
               id="email"
               className="form-control"
-              placeholder="e.g. admin@gmail.com"
+              placeholder="e.g. user@domain.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -120,9 +120,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className={styles.footer}>
-          <p>Admin: <code>admin@gmail.com</code> / <code>bridge.kl</code></p>
-        </div>
+
       </div>
     </div>
   );

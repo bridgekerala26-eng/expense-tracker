@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
       response.cookies.set('sb-user-id', '', { httpOnly: true, path: '/', maxAge: 0 });
       response.cookies.set('sb-user-role', '', { httpOnly: true, path: '/', maxAge: 0 });
       response.cookies.set('sb-user-name', '', { httpOnly: true, path: '/', maxAge: 0 });
+      response.cookies.set('sb-user-email', '', { httpOnly: true, path: '/', maxAge: 0 });
       return response;
     }
 
