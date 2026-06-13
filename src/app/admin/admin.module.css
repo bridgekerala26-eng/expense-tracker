@@ -1,0 +1,137 @@
+.adminWrapper {
+  min-height: 100vh;
+}
+
+.brandPanel {
+  background: var(--color-coral);
+  color: #ffffff !important;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  margin-left: 4px;
+  letter-spacing: 0.5px;
+}
+
+.adminTitleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 35px;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.adminTitleRow h2 {
+  font-size: 1.8rem;
+  font-family: var(--font-heading);
+  letter-spacing: -0.5px;
+}
+
+.modeIndicator {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  background: var(--color-sand-medium);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: var(--glass-border);
+}
+
+.mockMode {
+  color: var(--color-coral);
+  font-weight: 700;
+}
+
+.dbMode {
+  color: var(--color-mint);
+  font-weight: 700;
+}
+
+.adminCard {
+  margin-bottom: 24px;
+}
+
+.adminCard h3 {
+  font-size: 1.15rem;
+  font-family: var(--font-heading);
+  color: var(--color-ocean-dark);
+  margin-bottom: 4px;
+}
+
+.cardSubtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 600px) {
+  .formGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* User Directory List */
+.userList {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-sand-dark);
+  box-shadow: var(--shadow-inset);
+  overflow: hidden;
+}
+
+.userRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-sand-medium);
+}
+
+.userRow:last-child {
+  border-bottom: none;
+}
+
+.userInfoCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.userNameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.userNameText {
+  font-weight: 600;
+  color: var(--color-ocean-dark);
+  font-size: 0.95rem;
+}
+
+.userEmailText {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.noUsers {
+  padding: 30px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+}

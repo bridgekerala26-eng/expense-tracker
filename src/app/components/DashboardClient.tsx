@@ -1,0 +1,501 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import styles from './dashboard.module.css';
+
+interface Profile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+}
+
+interface Entry {
+  id: string;
+  user_id: string | null;
+  user_name: string;
+  amount: number;
+  type: 'income' | 'expense';
+  category: string;
+  description: string;
+  date: string;
+  created_at: string;
+}
+
+interface DashboardClientProps {
+  initialEntries: Entry[];
+  profiles: Profile[];
+  currentUser: {
+    id: string;
+    name: string;
+    role: 'admin' | 'user';
+    email?: string;
+  };
+  systemMode: string;
+}
+
+const EXPENSE_CATEGORIES = ['Food', 'Transport', 'Venue', 'Equipment', 'Misc'];
+const INCOME_CATEGORIES = ['Ticket Sales', 'Sponsorship', 'Stalls', 'Misc'];
+
+export default function DashboardClient({
+  initialEntries,
+  profiles,
+  currentUser,
+  systemMode,
+}: DashboardClientProps) {
+  const [entries, setEntries] = useState<Entry[]>(initialEntries);
+  const [filterUser, setFilterUser] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterDateStart, setFilterDateStart] = useState('');
+  const [filterDateEnd, setFilterDateEnd] = useState('');
+  
+  // Modal State
+  const [modalOpen, setModalOpen] = useState(false);
+  const [entryType, setEntryType] = useState<'income' | 'expense'>('expense');
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const router = useRouter();
+
+  // Handle Logout
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+      router.refresh();
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  // Handle Submit Form
+  const handleSubmitEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setModalError('');
+    setSuccessMessage('');
+
+    if (!amount || parseFloat(amount) <= 0) {
+      setModalError('Please enter a valid amount.');
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/entries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+          type: entryType,
+          category,
+          description,
+          date,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to add transaction.');
+      }
+
+      // Prepend the new entry to entries list
+      setEntries([data.entry, ...entries]);
+      setSuccessMessage('Transaction added successfully!');
+      
+      // Reset Form fields
+      setAmount('');
+      setDescription('');
+      setDate(new Date().toISOString().split('T')[0]);
+      
+      // Close modal after a short delay
+      setTimeout(() => {
+        setModalOpen(false);
+        setSuccessMessage('');
+      }, 1000);
+    } catch (err: any) {
+      setModalError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Change entry type inside modal (resets category dropdown)
+  const handleTypeChange = (type: 'income' | 'expense') => {
+    setEntryType(type);
+    setCategory(type === 'expense' ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0]);
+  };
+
+  // Filter Logic
+  const filteredEntries = entries.filter((e) => {
+    // User Filter
+    if (filterUser && e.user_id !== filterUser) return false;
+    
+    // Category Filter
+    if (filterCategory && e.category !== filterCategory) return false;
+    
+    // Date Start Filter
+    if (filterDateStart && e.date < filterDateStart) return false;
+    
+    // Date End Filter
+    if (filterDateEnd && e.date > filterDateEnd) return false;
+    
+    return true;
+  });
+
+  // Calculate Summary Totals
+  const totalIncome = filteredEntries
+    .filter((e) => e.type === 'income')
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const totalExpense = filteredEntries
+    .filter((e) => e.type === 'expense')
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const netBalance = totalIncome - totalExpense;
+
+  // Formatting helper
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 2,
+    }).format(val);
+  };
+
+  // Initials helper for avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+  };
+
+  return (
+    <div className={styles.dashboardWrapper}>
+      {/* Header Navigation */}
+      <header className="navbar">
+        <div className="brand">
+          Bridge<span>Kerala</span>
+        </div>
+        <div className={styles.headerRight}>
+          <div className={styles.userInfo}>
+            <span className={styles.userName}>{currentUser.name}</span>
+            <span className={`${styles.userRole} badge ${currentUser.role === 'admin' ? 'badge-expense' : 'badge-income'}`}>
+              {currentUser.role}
+            </span>
+          </div>
+          
+          {currentUser.role === 'admin' && (
+            <button 
+              onClick={() => router.push('/admin')} 
+              className="btn btn-outline"
+              style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+            >
+              Admin Panel
+            </button>
+          )}
+          
+          <button onClick={handleLogout} className={styles.logoutBtn} aria-label="Sign Out">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          </button>
+        </div>
+      </header>
+
+      <main className="container" style={{ paddingBottom: '100px' }}>
+        
+        {/* Connection status banner for local testing environment visibility */}
+        {systemMode && systemMode.includes('Mock') && (
+          <div className={`${styles.mockBanner} alert alert-error`} style={{ marginTop: '20px', marginBottom: '0' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span><strong>Mock Offline Mode Active:</strong> Database is unreachable. Changes are saved locally in memory.</span>
+          </div>
+        )}
+
+        {/* Summary Dashboard cards */}
+        <section className={styles.summarySection}>
+          <div className={`${styles.summaryCard} ${styles.incomeCard} glass-card`}>
+            <h3>Total Revenue</h3>
+            <p className={styles.amountText}>{formatCurrency(totalIncome)}</p>
+            <div className={styles.cardAccentLine} style={{ backgroundColor: 'var(--color-mint)' }} />
+          </div>
+
+          <div className={`${styles.summaryCard} ${styles.expenseCard} glass-card`}>
+            <h3>Total Expenses</h3>
+            <p className={styles.amountText}>{formatCurrency(totalExpense)}</p>
+            <div className={styles.cardAccentLine} style={{ backgroundColor: 'var(--color-coral)' }} />
+          </div>
+
+          <div className={`${styles.summaryCard} ${styles.balanceCard} glass-card`}>
+            <h3>Net Balance</h3>
+            <p className={`${styles.amountText} ${netBalance >= 0 ? styles.positiveBalance : styles.negativeBalance}`}>
+              {formatCurrency(netBalance)}
+            </p>
+            <div className={styles.cardAccentLine} style={{ backgroundColor: netBalance >= 0 ? 'var(--color-mint)' : 'var(--color-coral)' }} />
+          </div>
+        </section>
+
+        {/* Quick Add Button & Header */}
+        <section className={styles.sectionHeader}>
+          <h2>Shared Feed</h2>
+          <button onClick={() => setModalOpen(true)} className="btn btn-accent">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Entry
+          </button>
+        </section>
+
+        {/* Filters Panel */}
+        <section className={`${styles.filtersCard} glass-card`}>
+          <div className={styles.filterTitle}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+            Filter Entries
+          </div>
+          <div className={styles.filterGrid}>
+            <div className="form-group" style={{ marginBottom: '0' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>User</label>
+              <select 
+                className="form-control" 
+                value={filterUser} 
+                onChange={(e) => setFilterUser(e.target.value)}
+                style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+              >
+                <option value="">All Users</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '0' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Category</label>
+              <select 
+                className="form-control" 
+                value={filterCategory} 
+                onChange={(e) => setFilterCategory(e.target.value)}
+                style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+              >
+                <option value="">All Categories</option>
+                <optgroup label="Income">
+                  {INCOME_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Expenses">
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '0' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>From Date</label>
+              <input 
+                type="date" 
+                className="form-control" 
+                value={filterDateStart}
+                onChange={(e) => setFilterDateStart(e.target.value)}
+                style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '0' }}>
+              <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>To Date</label>
+              <input 
+                type="date" 
+                className="form-control" 
+                value={filterDateEnd}
+                onChange={(e) => setFilterDateEnd(e.target.value)}
+                style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+              />
+            </div>
+          </div>
+          
+          {(filterUser || filterCategory || filterDateStart || filterDateEnd) && (
+            <button 
+              onClick={() => {
+                setFilterUser('');
+                setFilterCategory('');
+                setFilterDateStart('');
+                setFilterDateEnd('');
+              }}
+              className={styles.clearFiltersBtn}
+            >
+              Clear Active Filters
+            </button>
+          )}
+        </section>
+
+        {/* Transactions Feed */}
+        <section className={styles.feedSection}>
+          {filteredEntries.length === 0 ? (
+            <div className={styles.emptyFeed}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-ocean-light)', marginBottom: '16px' }}><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
+              <p>No transactions match your search filters.</p>
+            </div>
+          ) : (
+            filteredEntries.map((e) => (
+              <div key={e.id} className={`${styles.feedItem} glass-card`}>
+                <div className={styles.feedItemLeft}>
+                  <div className={`${styles.avatar} ${e.type === 'income' ? styles.avatarIncome : styles.avatarExpense}`}>
+                    {getInitials(e.user_name)}
+                  </div>
+                  <div className={styles.entryDetails}>
+                    <div className={styles.entryUserRow}>
+                      <span className={styles.entryUser}>{e.user_name}</span>
+                      <span className={styles.entryDate}>
+                        {new Date(e.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                    {e.description && <p className={styles.entryDesc}>{e.description}</p>}
+                  </div>
+                </div>
+                
+                <div className={styles.feedItemRight}>
+                  <div className={`${styles.entryAmount} ${e.type === 'income' ? styles.incomeText : styles.expenseText}`}>
+                    {e.type === 'income' ? '+' : '-'} {formatCurrency(e.amount)}
+                  </div>
+                  <span className={`badge ${e.type === 'income' ? 'badge-income' : 'badge-expense'}`}>
+                    {e.category}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </section>
+      </main>
+
+      {/* Add Entry Slide-up Modal Drawer */}
+      {modalOpen && (
+        <div className={styles.modalOverlay} onClick={() => setModalOpen(false)}>
+          <div className={`${styles.modalDrawer} glass-card`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Add New Entry</h3>
+              <button className={styles.closeBtn} onClick={() => setModalOpen(false)} aria-label="Close modal">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+
+            {modalError && (
+              <div className="alert alert-error">
+                {modalError}
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="alert alert-success">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                {successMessage}
+              </div>
+            )}
+
+            {/* Type selector toggle */}
+            <div className={styles.typeSelector}>
+              <button
+                type="button"
+                className={`${styles.typeBtn} ${entryType === 'expense' ? styles.typeBtnExpenseActive : ''}`}
+                onClick={() => handleTypeChange('expense')}
+              >
+                Expense
+              </button>
+              <button
+                type="button"
+                className={`${styles.typeBtn} ${entryType === 'income' ? styles.typeBtnIncomeActive : ''}`}
+                onClick={() => handleTypeChange('income')}
+              >
+                Revenue/Income
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitEntry} className={styles.modalForm}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="modal-amount">Amount (INR)</label>
+                <input
+                  type="number"
+                  id="modal-amount"
+                  className="form-control"
+                  placeholder="e.g. 5000"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  step="0.01"
+                  min="0.01"
+                  required
+                  disabled={submitting}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="modal-category">Category</label>
+                <select
+                  id="modal-category"
+                  className="form-control"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  disabled={submitting}
+                >
+                  {entryType === 'expense'
+                    ? EXPENSE_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))
+                    : INCOME_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="modal-date">Date</label>
+                <input
+                  type="date"
+                  id="modal-date"
+                  className="form-control"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  disabled={submitting}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="modal-desc">Description</label>
+                <textarea
+                  id="modal-desc"
+                  className="form-control"
+                  placeholder="Provide some details..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                  disabled={submitting}
+                  style={{ resize: 'none' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary btn-block"
+                style={{ marginTop: '20px' }}
+                disabled={submitting}
+              >
+                {submitting ? <span className={styles.spinner}></span> : 'Save Entry'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
