@@ -8,7 +8,7 @@ export async function GET() {
     // 1. Create public.users table
     await db.rawQuery(`
       CREATE TABLE IF NOT EXISTS public.users (
-        id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+        id UUID PRIMARY KEY,
         name TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         password TEXT,
@@ -17,19 +17,20 @@ export async function GET() {
       );
     `);
 
-    // Ensure columns exist if table was already created
+    // Ensure columns and constraints are adjusted for existing tables
     try {
       await db.rawQuery(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password TEXT;`);
       await db.rawQuery(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'Member';`);
+      await db.rawQuery(`ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_id_fkey;`);
     } catch (e: any) {
-      console.log('Alter columns warning (ignored):', e.message);
+      console.log('Adjust users table warning (ignored):', e.message);
     }
 
     // 2. Create public.entries table
     await db.rawQuery(`
       CREATE TABLE IF NOT EXISTS public.entries (
         id uuid default gen_random_uuid() primary key,
-        user_id uuid references auth.users(id),
+        user_id uuid,
         user_name text,
         type text check (type in ('expense', 'income')),
         amount numeric not null,
@@ -39,6 +40,12 @@ export async function GET() {
         created_at timestamp default now()
       );
     `);
+
+    try {
+      await db.rawQuery(`ALTER TABLE public.entries DROP CONSTRAINT IF EXISTS entries_user_id_fkey;`);
+    } catch (e: any) {
+      console.log('Adjust entries table warning (ignored):', e.message);
+    }
 
     // Disable Row Level Security (RLS) to ensure shared feed visibility
     await db.rawQuery('ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;');

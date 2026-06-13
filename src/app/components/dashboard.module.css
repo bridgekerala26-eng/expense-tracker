@@ -409,3 +409,36 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+.entryActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.actionBtnEdit, .actionBtnDelete {
+  background: transparent;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  transition: var(--transition-fast);
+}
+
+.actionBtnEdit {
+  color: var(--color-ocean-medium);
+}
+
+.actionBtnEdit:hover {
+  color: var(--color-ocean-dark);
+}
+
+.actionBtnDelete {
+  color: var(--color-coral);
+}
+
+.actionBtnDelete:hover {
+  color: #c84e23;
+}

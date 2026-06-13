@@ -57,7 +57,47 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  
+  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setEditingEntry(null);
+    setAmount('');
+    setDescription('');
+    setDate(new Date().toISOString().split('T')[0]);
+    setModalError('');
+    setSuccessMessage('');
+  };
+
+  const handleStartEdit = (entry: Entry) => {
+    setEditingEntry(entry);
+    setAmount(entry.amount.toString());
+    setEntryType(entry.type);
+    setCategory(entry.category);
+    setDescription(entry.description);
+    setDate(entry.date);
+    setModalOpen(true);
+  };
+
+  const handleDeleteEntry = async (entryId: string) => {
+    const confirmDelete = window.confirm('Are you sure you want to delete this transaction?');
+    if (!confirmDelete) return;
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('entries')
+        .delete()
+        .eq('id', entryId);
+
+      if (deleteError) throw new Error(deleteError.message);
+
+      // Remove from state
+      setEntries(entries.filter(e => e.id !== entryId));
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`);
+    }
+  };
+
   const router = useRouter();
 
   // Load entries and users directly from Supabase via HTTPS
@@ -119,7 +159,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
     }
   };
 
-  // Handle Add Entry Form
+  // Handle Add/Edit Entry Form
   const handleSubmitEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -133,43 +173,78 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
     }
 
     try {
-      // Insert new entry in Supabase and fetch inserted row
-      const { data: insertedData, error: insertError } = await supabase
-        .from('entries')
-        .insert({
-          user_id: currentUser.id,
-          user_name: currentUser.name,
-          amount: parseFloat(amount),
-          type: entryType,
-          category,
-          description,
-          date,
-        })
-        .select('*');
+      if (editingEntry) {
+        // Edit Mode: Update existing entry in Supabase
+        const { data: updatedData, error: updateError } = await supabase
+          .from('entries')
+          .update({
+            amount: parseFloat(amount),
+            type: entryType,
+            category,
+            description,
+            date,
+          })
+          .eq('id', editingEntry.id)
+          .select('*');
 
-      if (insertError) throw new Error(insertError.message);
-      if (!insertedData || insertedData.length === 0) throw new Error('Transaction could not be saved.');
+        if (updateError) throw new Error(updateError.message);
+        if (!updatedData || updatedData.length === 0) throw new Error('Transaction could not be updated.');
 
-      const mappedNewEntry: Entry = {
-        id: insertedData[0].id,
-        user_id: insertedData[0].user_id,
-        user_name: insertedData[0].user_name || currentUser.name,
-        amount: parseFloat(insertedData[0].amount),
-        type: insertedData[0].type,
-        category: insertedData[0].category,
-        description: insertedData[0].description || '',
-        date: insertedData[0].date,
-        created_at: insertedData[0].created_at,
-      };
+        const updatedEntry: Entry = {
+          id: updatedData[0].id,
+          user_id: updatedData[0].user_id,
+          user_name: updatedData[0].user_name || currentUser.name,
+          amount: parseFloat(updatedData[0].amount),
+          type: updatedData[0].type,
+          category: updatedData[0].category,
+          description: updatedData[0].description || '',
+          date: updatedData[0].date,
+          created_at: updatedData[0].created_at,
+        };
 
-      // Add to UI state
-      setEntries([mappedNewEntry, ...entries]);
-      setSuccessMessage('Transaction added to Supabase database!');
+        // Update UI state
+        setEntries(entries.map(item => item.id === editingEntry.id ? updatedEntry : item));
+        setSuccessMessage('Transaction updated in Supabase database!');
+      } else {
+        // Add Mode: Insert new entry in Supabase
+        const { data: insertedData, error: insertError } = await supabase
+          .from('entries')
+          .insert({
+            user_id: currentUser.id,
+            user_name: currentUser.name,
+            amount: parseFloat(amount),
+            type: entryType,
+            category,
+            description,
+            date,
+          })
+          .select('*');
+
+        if (insertError) throw new Error(insertError.message);
+        if (!insertedData || insertedData.length === 0) throw new Error('Transaction could not be saved.');
+
+        const mappedNewEntry: Entry = {
+          id: insertedData[0].id,
+          user_id: insertedData[0].user_id,
+          user_name: insertedData[0].user_name || currentUser.name,
+          amount: parseFloat(insertedData[0].amount),
+          type: insertedData[0].type,
+          category: insertedData[0].category,
+          description: insertedData[0].description || '',
+          date: insertedData[0].date,
+          created_at: insertedData[0].created_at,
+        };
+
+        // Add to UI state
+        setEntries([mappedNewEntry, ...entries]);
+        setSuccessMessage('Transaction added to Supabase database!');
+      }
       
       // Reset Form
       setAmount('');
       setDescription('');
       setDate(new Date().toISOString().split('T')[0]);
+      setEditingEntry(null);
       
       setTimeout(() => {
         setModalOpen(false);
@@ -419,6 +494,16 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
                       </span>
                     </div>
                     {e.description && <p className={styles.entryDesc}>{e.description}</p>}
+                    {e.user_id === currentUser.id && (
+                      <div className={styles.entryActions}>
+                        <button onClick={() => handleStartEdit(e)} className={styles.actionBtnEdit}>
+                          Edit
+                        </button>
+                        <button onClick={() => handleDeleteEntry(e.id)} className={styles.actionBtnDelete}>
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -436,13 +521,13 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
         </section>
       </main>
 
-      {/* Add Entry Slide-up Modal Drawer */}
+      {/* Add/Edit Entry Slide-up Modal Drawer */}
       {modalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setModalOpen(false)}>
+        <div className={styles.modalOverlay} onClick={handleCloseModal}>
           <div className={`${styles.modalDrawer} glass-card`} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3>Add New Entry</h3>
-              <button className={styles.closeBtn} onClick={() => setModalOpen(false)} aria-label="Close modal">
+              <h3>{editingEntry ? 'Edit Entry' : 'Add New Entry'}</h3>
+              <button className={styles.closeBtn} onClick={handleCloseModal} aria-label="Close modal">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
@@ -547,7 +632,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
                 style={{ marginTop: '20px' }}
                 disabled={submitting}
               >
-                {submitting ? <span className={styles.spinner}></span> : 'Save Entry'}
+                {submitting ? <span className={styles.spinner}></span> : editingEntry ? 'Update Entry' : 'Save Entry'}
               </button>
             </form>
           </div>

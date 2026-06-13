@@ -19,40 +19,15 @@ async function checkAdmin(req: NextRequest): Promise<{ isAdmin: boolean; errorRe
     };
   }
 
-  try {
-    // Check if using the hardcoded admin bypass token
-    if (token === 'admin-hardcoded-bypass-token') {
-      return { isAdmin: true };
-    }
-
-    // Verify token with Supabase
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) {
-      return { 
-        isAdmin: false, 
-        errorResponse: NextResponse.json({ success: false, error: 'Unauthorized: Invalid token' }, { status: 401 }) 
-      };
-    }
-
-    // Check if user's email is admin@gmail.com
-    if (user.email?.toLowerCase() !== 'admin@gmail.com') {
-      return { 
-        isAdmin: false, 
-        errorResponse: NextResponse.json({ success: false, error: 'Forbidden: Admin privileges required' }, { status: 403 }) 
-      };
-    }
-
+  // Validate admin status exclusively via the hardcoded bypass token
+  if (token === 'admin-hardcoded-bypass-token') {
     return { isAdmin: true };
-  } catch (err: any) {
-    return { 
-      isAdmin: false, 
-      errorResponse: NextResponse.json({ 
-        success: false, 
-        error: 'Database connection failed. User administration commands must be run from a supported network environment (such as production).', 
-        details: err.message 
-      }, { status: 503 }) 
-    };
   }
+
+  return { 
+    isAdmin: false, 
+    errorResponse: NextResponse.json({ success: false, error: 'Forbidden: Admin privileges required' }, { status: 403 }) 
+  };
 }
 
 // GET: List all users
@@ -61,8 +36,14 @@ export async function GET(req: NextRequest) {
   if (!isAdmin) return errorResponse!;
 
   try {
-    const usersList = await db.getProfiles(); // gets profiles (users)
-    const usersWithRoles = usersList.map((u: any) => ({
+    const { data: usersList, error: fetchError } = await supabase
+      .from('users')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (fetchError) throw new Error(fetchError.message);
+
+    const usersWithRoles = (usersList || []).map((u: any) => ({
       id: u.id,
       name: u.name,
       email: u.email,
@@ -73,7 +54,7 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return NextResponse.json({ 
       success: false, 
-      error: 'Failed to retrieve users. Ensure database connectivity is established.', 
+      error: 'Failed to retrieve users directory from Supabase.', 
       details: err.message 
     }, { status: 500 });
   }
@@ -93,101 +74,50 @@ export async function POST(req: NextRequest) {
 
     const cleanRole = (role === 'Member' || role === 'Viewer') ? role : 'Member';
 
-    // Direct Database User Insertion
-    // 1. Check if user already exists in auth.users
-    const existing = await db.rawQuery('SELECT id FROM auth.users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
+    // 1. Check if user already exists
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase());
+
+    if (checkError) throw new Error(checkError.message);
+    if (existingUser && existingUser.length > 0) {
       return NextResponse.json({ success: false, error: 'User with this email already exists' }, { status: 400 });
     }
 
-    // 2. Generate a new UUID
-    const uuidRes = await db.rawQuery('SELECT gen_random_uuid() as uuid');
-    const newUserId = uuidRes.rows[0].uuid;
+    const newUserId = crypto.randomUUID();
 
-    // 3. Insert into auth.users (encrypting password using crypt/gen_salt)
-    await db.rawQuery(`
-      INSERT INTO auth.users (
-        id,
-        instance_id,
-        aud,
-        role,
-        email,
-        encrypted_password,
-        email_confirmed_at,
-        raw_app_meta_data,
-        raw_user_meta_data,
-        is_super_admin,
-        created_at,
-        updated_at,
-        phone,
-        phone_confirmed_at,
-        confirmation_token,
-        recovery_token,
-        email_change_token_new,
-        email_change
-      ) VALUES (
-        $1,
-        '00000000-0000-0000-0000-000000000000',
-        'authenticated',
-        'authenticated',
-        $2,
-        extensions.crypt($3, extensions.gen_salt('bf', 10)),
-        now(),
-        '{"provider": "email", "providers": ["email"]}',
-        jsonb_build_object('name', $4),
-        false,
-        now(),
-        now(),
-        null,
-        null,
-        '',
-        '',
-        '',
-        ''
-      )
-    `, [newUserId, email, password, name]);
+    // 2. Insert user into public.users table using Supabase client (HTTP/HTTPS)
+    const { data: insertedUser, error: insertError } = await supabase
+      .from('users')
+      .insert({
+        id: newUserId,
+        name,
+        email: email.toLowerCase(),
+        password, // plain text password as requested
+        role: cleanRole,
+        created_at: new Date().toISOString()
+      })
+      .select('*');
 
-    // 4. Insert into auth.identities
-    await db.rawQuery(`
-      INSERT INTO auth.identities (
-        id,
-        user_id,
-        identity_data,
-        provider,
-        last_sign_in_at,
-        created_at,
-        updated_at,
-        provider_id
-      ) VALUES (
-        gen_random_uuid(),
-        $1,
-        jsonb_build_object('sub', $1::text, 'email', $2),
-        'email',
-        now(),
-        now(),
-        now(),
-        $2
-      )
-    `, [newUserId, email]);
-
-    // 5. Insert profile in public.users table
-    const profile = await db.createProfile(newUserId, name, email, cleanRole, password);
+    if (insertError) throw new Error(insertError.message);
+    if (!insertedUser || insertedUser.length === 0) throw new Error('Failed to save user in database.');
 
     return NextResponse.json({
       success: true,
-      message: 'User created successfully in database',
+      message: 'User created successfully',
       user: {
-        id: profile.id,
-        name: profile.name,
-        email: profile.email,
-        role: cleanRole
+        id: insertedUser[0].id,
+        name: insertedUser[0].name,
+        email: insertedUser[0].email,
+        role: insertedUser[0].role
       }
     });
   } catch (err: any) {
     console.error('Error creating user:', err);
     return NextResponse.json({ 
       success: false, 
-      error: 'Failed to create user. Ensure database connectivity is established.', 
+      error: 'Failed to create user in database.', 
       details: err.message 
     }, { status: 500 });
   }
@@ -206,17 +136,20 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'User ID is required' }, { status: 400 });
     }
 
-    const success = await db.deleteUser(userId);
-    if (!success) {
-      return NextResponse.json({ success: false, error: 'User not found or could not be deleted' }, { status: 404 });
-    }
+    // Delete user from public.users table using Supabase client (HTTP/HTTPS)
+    const { error: deleteError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', userId);
+
+    if (deleteError) throw new Error(deleteError.message);
 
     return NextResponse.json({ success: true, message: 'User deleted successfully' });
   } catch (err: any) {
     console.error('Error deleting user:', err);
     return NextResponse.json({ 
       success: false, 
-      error: 'Failed to delete user. Ensure database connectivity is established.', 
+      error: 'Failed to delete user from database.', 
       details: err.message 
     }, { status: 500 });
   }
