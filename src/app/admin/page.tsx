@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db';
 import AdminClient from './AdminClient';
 
 export const revalidate = 0;
@@ -21,14 +20,9 @@ export default async function AdminPage() {
     redirect('/');
   }
 
-  // 2. Fetch data
-  const profiles = await db.getProfiles();
-  const mode = await db.getMode();
-
+  // Render Admin client. It will fetch user directory via supabase-js client-side.
   return (
     <AdminClient
-      initialUsers={profiles}
-      systemMode={mode}
       currentUserId={userId}
       currentUserName={userName || 'Admin'}
     />

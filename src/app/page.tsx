@@ -1,9 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db';
 import DashboardClient from './components/DashboardClient';
 
-// Disable caching for this page so it always loads fresh entries from the database/mock store
 export const revalidate = 0;
 
 export default async function HomePage() {
@@ -18,22 +16,15 @@ export default async function HomePage() {
     redirect('/login');
   }
 
-  // Fetch initial data on the server
-  // This gets entries and profiles from DB or the local mock fallback automatically!
-  const entries = await db.getEntries();
-  const profiles = await db.getProfiles();
-  const mode = await db.getMode();
-
+  // Pass session details to client.
+  // The client component will fetch profiles and entries directly from Supabase over HTTPS (fully IPv4 compatible).
   return (
     <DashboardClient
-      initialEntries={entries}
-      profiles={profiles}
       currentUser={{
         id: userId,
         name: userName || 'Authenticated User',
         role: userRole || 'user',
       }}
-      systemMode={mode}
     />
   );
 }

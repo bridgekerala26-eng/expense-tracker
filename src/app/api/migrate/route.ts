@@ -1,21 +1,11 @@
 import { NextResponse } from 'next/server';
-import { db, isFallback } from '@/lib/db';
+import { db } from '@/lib/db';
 
 export async function GET() {
   try {
-    // 1. Check if we are running in database mode
-    const fallback = await isFallback();
-    if (fallback) {
-      return NextResponse.json({
-        success: false,
-        message: 'Cannot run database migrations in Fallback Mode. Please check database connection and IPv6 compatibility.',
-        mode: 'Mock Mode'
-      }, { status: 400 });
-    }
+    console.log('Running database migrations directly on Supabase...');
 
-    console.log('Running database migrations...');
-
-    // 2. Create tables
+    // 1. Create tables
     // Create Profiles table in public schema referencing auth.users
     await db.rawQuery(`
       CREATE TABLE IF NOT EXISTS public.profiles (
@@ -31,7 +21,7 @@ export async function GET() {
     await db.rawQuery(`
       CREATE TABLE IF NOT EXISTS public.entries (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+        user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
         amount NUMERIC(12, 2) NOT NULL,
         type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
         category TEXT NOT NULL,
@@ -45,7 +35,7 @@ export async function GET() {
     await db.rawQuery('ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;');
     await db.rawQuery('ALTER TABLE public.entries DISABLE ROW LEVEL SECURITY;');
 
-    // 3. Seed Admin User
+    // 2. Seed Admin User
     const adminEmail = 'admin@gmail.com';
     
     // Check if admin user already exists in auth.users
@@ -142,8 +132,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: 'Migrations and seeding executed successfully!',
-      mode: 'Supabase Database Mode',
+      message: 'Migrations and seeding executed successfully directly in Supabase!',
       adminId: adminUserId
     });
   } catch (err: any) {

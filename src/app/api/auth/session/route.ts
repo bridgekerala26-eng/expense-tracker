@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, isFallback } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
 export async function GET(req: NextRequest) {
   try {
-    const fallback = await isFallback();
-    
     // Read session data from cookies
     const token = req.cookies.get('sb-access-token')?.value;
     const userId = req.cookies.get('sb-user-id')?.value;
@@ -16,22 +13,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, authenticated: false });
     }
 
-    if (fallback) {
-      // Return mock session
-      return NextResponse.json({
-        success: true,
-        authenticated: true,
-        mode: 'Mock Mode',
-        user: {
-          id: userId,
-          name: userName || 'Mock User',
-          role: userRole || 'user'
-        }
-      });
-    }
-
-    // Database Mode validation
-    // Verify token with Supabase Auth to ensure it is valid
+    // Verify token with Supabase Auth
     const { data: { user }, error } = await supabase.auth.getUser(token);
     
     if (error || !user || user.id !== userId) {

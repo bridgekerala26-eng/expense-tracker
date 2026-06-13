@@ -1,22 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, isFallback } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
-// GET: Retrieve all entries from all users
+// GET: Retrieve all entries from all users using Supabase client (HTTP)
 export async function GET() {
   try {
-    const entries = await db.getEntries();
-    return NextResponse.json({ success: true, entries });
+    const { data: entriesData, error: entriesError } = await supabase
+      .from('entries')
+      .select('*, profiles(name)')
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (entriesError) throw new Error(entriesError.message);
+
+    // Map entries to flatten user_name
+    const mapped = (entriesData || []).map((e: any) => ({
+      id: e.id,
+      user_id: e.user_id,
+      user_name: e.profiles?.name || 'Unknown User',
+      amount: parseFloat(e.amount),
+      type: e.type,
+      category: e.category,
+      description: e.description || '',
+      date: e.date,
+      created_at: e.created_at,
+    }));
+
+    return NextResponse.json({ success: true, entries: mapped });
   } catch (err: any) {
-    console.error('Error fetching entries:', err);
+    console.error('Error fetching entries via API:', err);
     return NextResponse.json({ success: false, error: 'Failed to fetch entries', details: err.message }, { status: 500 });
   }
 }
 
-// POST: Add a new entry (expense or income)
+// POST: Add a new entry (expense or income) using Supabase client (HTTP)
 export async function POST(req: NextRequest) {
   try {
-    // 1. Authenticate user from session cookies
     const token = req.cookies.get('sb-access-token')?.value;
     const cookieUserId = req.cookies.get('sb-user-id')?.value;
 
@@ -24,19 +42,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Session missing' }, { status: 401 });
     }
 
-    const fallback = await isFallback();
-    let userId: string = cookieUserId;
-
-    if (!fallback) {
-      // Validate session token with Supabase in production
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      if (error || !user) {
-        return NextResponse.json({ success: false, error: 'Unauthorized: Session invalid or expired' }, { status: 401 });
-      }
-      userId = user.id;
+    // Validate token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user || user.id !== cookieUserId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Session invalid' }, { status: 401 });
     }
 
-    // 2. Parse and validate request body
     const body = await req.json();
     const { amount, type, category, description, date } = body;
 
@@ -49,19 +60,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Amount must be a valid positive number' }, { status: 400 });
     }
 
-    if (type !== 'income' && type !== 'expense') {
-      return NextResponse.json({ success: false, error: 'Type must be either "income" or "expense"' }, { status: 400 });
-    }
+    // Insert into Supabase database via HTTP REST
+    const { data: insertedData, error: insertError } = await supabase
+      .from('entries')
+      .insert({
+        user_id: user.id,
+        amount: parsedAmount,
+        type,
+        category,
+        description: description || '',
+        date
+      })
+      .select('*, profiles(name)');
 
-    // 3. Save entry to DB or mock store
-    const newEntry = await db.addEntry({
-      user_id: userId,
-      amount: parsedAmount,
-      type,
-      category,
-      description: description || '',
-      date
-    });
+    if (insertError) throw new Error(insertError.message);
+    if (!insertedData || insertedData.length === 0) throw new Error('Transaction could not be saved.');
+
+    const newEntry = {
+      id: insertedData[0].id,
+      user_id: insertedData[0].user_id,
+      user_name: insertedData[0].profiles?.name || user.email?.split('@')[0] || 'Unknown User',
+      amount: parseFloat(insertedData[0].amount),
+      type: insertedData[0].type,
+      category: insertedData[0].category,
+      description: insertedData[0].description || '',
+      date: insertedData[0].date,
+      created_at: insertedData[0].created_at,
+    };
 
     return NextResponse.json({
       success: true,
@@ -69,7 +94,7 @@ export async function POST(req: NextRequest) {
       entry: newEntry
     });
   } catch (err: any) {
-    console.error('Error adding entry:', err);
+    console.error('Error adding entry via API:', err);
     return NextResponse.json({ success: false, error: 'Failed to add entry', details: err.message }, { status: 500 });
   }
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import styles from './dashboard.module.css';
 
 interface Profile {
@@ -24,27 +25,24 @@ interface Entry {
 }
 
 interface DashboardClientProps {
-  initialEntries: Entry[];
-  profiles: Profile[];
   currentUser: {
     id: string;
     name: string;
     role: 'admin' | 'user';
     email?: string;
   };
-  systemMode: string;
 }
 
 const EXPENSE_CATEGORIES = ['Food', 'Transport', 'Venue', 'Equipment', 'Misc'];
 const INCOME_CATEGORIES = ['Ticket Sales', 'Sponsorship', 'Stalls', 'Misc'];
 
-export default function DashboardClient({
-  initialEntries,
-  profiles,
-  currentUser,
-  systemMode,
-}: DashboardClientProps) {
-  const [entries, setEntries] = useState<Entry[]>(initialEntries);
+export default function DashboardClient({ currentUser }: DashboardClientProps) {
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Filters State
   const [filterUser, setFilterUser] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterDateStart, setFilterDateStart] = useState('');
@@ -60,7 +58,56 @@ export default function DashboardClient({
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  
   const router = useRouter();
+
+  // Load entries and profiles directly from Supabase via HTTPS
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      setError('');
+      try {
+        // 1. Fetch Profiles
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (profilesError) throw new Error(profilesError.message);
+        setProfiles(profilesData || []);
+
+        // 2. Fetch Entries joined with profiles
+        const { data: entriesData, error: entriesError } = await supabase
+          .from('entries')
+          .select('*, profiles(name)')
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        if (entriesError) throw new Error(entriesError.message);
+
+        // Map entries to flatten user_name
+        const mapped: Entry[] = (entriesData || []).map((e: any) => ({
+          id: e.id,
+          user_id: e.user_id,
+          user_name: e.profiles?.name || 'Unknown User',
+          amount: parseFloat(e.amount),
+          type: e.type,
+          category: e.category,
+          description: e.description || '',
+          date: e.date,
+          created_at: e.created_at,
+        }));
+
+        setEntries(mapped);
+      } catch (err: any) {
+        console.error('Fetch error:', err);
+        setError(`Failed to connect to Supabase: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
 
   // Handle Logout
   const handleLogout = async () => {
@@ -73,7 +120,7 @@ export default function DashboardClient({
     }
   };
 
-  // Handle Submit Form
+  // Handle Add Entry Form
   const handleSubmitEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -87,36 +134,43 @@ export default function DashboardClient({
     }
 
     try {
-      const response = await fetch('/api/entries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Insert new entry in Supabase
+      const { data: insertedData, error: insertError } = await supabase
+        .from('entries')
+        .insert({
+          user_id: currentUser.id,
           amount: parseFloat(amount),
           type: entryType,
           category,
           description,
           date,
-        }),
-      });
+        })
+        .select('*, profiles(name)');
 
-      const data = await response.json();
+      if (insertError) throw new Error(insertError.message);
+      if (!insertedData || insertedData.length === 0) throw new Error('Transaction could not be saved.');
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to add transaction.');
-      }
+      const mappedNewEntry: Entry = {
+        id: insertedData[0].id,
+        user_id: insertedData[0].user_id,
+        user_name: insertedData[0].profiles?.name || currentUser.name,
+        amount: parseFloat(insertedData[0].amount),
+        type: insertedData[0].type,
+        category: insertedData[0].category,
+        description: insertedData[0].description || '',
+        date: insertedData[0].date,
+        created_at: insertedData[0].created_at,
+      };
 
-      // Prepend the new entry to entries list
-      setEntries([data.entry, ...entries]);
-      setSuccessMessage('Transaction added successfully!');
+      // Add to UI state
+      setEntries([mappedNewEntry, ...entries]);
+      setSuccessMessage('Transaction added to Supabase database!');
       
-      // Reset Form fields
+      // Reset Form
       setAmount('');
       setDescription('');
       setDate(new Date().toISOString().split('T')[0]);
       
-      // Close modal after a short delay
       setTimeout(() => {
         setModalOpen(false);
         setSuccessMessage('');
@@ -136,18 +190,10 @@ export default function DashboardClient({
 
   // Filter Logic
   const filteredEntries = entries.filter((e) => {
-    // User Filter
     if (filterUser && e.user_id !== filterUser) return false;
-    
-    // Category Filter
     if (filterCategory && e.category !== filterCategory) return false;
-    
-    // Date Start Filter
     if (filterDateStart && e.date < filterDateStart) return false;
-    
-    // Date End Filter
     if (filterDateEnd && e.date > filterDateEnd) return false;
-    
     return true;
   });
 
@@ -162,7 +208,6 @@ export default function DashboardClient({
 
   const netBalance = totalIncome - totalExpense;
 
-  // Formatting helper
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -171,7 +216,6 @@ export default function DashboardClient({
     }).format(val);
   };
 
-  // Initials helper for avatar
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -213,12 +257,10 @@ export default function DashboardClient({
       </header>
 
       <main className="container" style={{ paddingBottom: '100px' }}>
-        
-        {/* Connection status banner for local testing environment visibility */}
-        {systemMode && systemMode.includes('Mock') && (
-          <div className={`${styles.mockBanner} alert alert-error`} style={{ marginTop: '20px', marginBottom: '0' }}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span><strong>Mock Offline Mode Active:</strong> Database is unreachable. Changes are saved locally in memory.</span>
+        {error && (
+          <div className="alert alert-error" style={{ marginTop: '20px' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span>{error}</span>
           </div>
         )}
 
@@ -248,7 +290,7 @@ export default function DashboardClient({
         {/* Quick Add Button & Header */}
         <section className={styles.sectionHeader}>
           <h2>Shared Feed</h2>
-          <button onClick={() => setModalOpen(true)} className="btn btn-accent">
+          <button onClick={() => setModalOpen(true)} className="btn btn-accent" disabled={loading}>
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Add Entry
           </button>
@@ -268,6 +310,7 @@ export default function DashboardClient({
                 value={filterUser} 
                 onChange={(e) => setFilterUser(e.target.value)}
                 style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+                disabled={loading}
               >
                 <option value="">All Users</option>
                 {profiles.map((p) => (
@@ -283,6 +326,7 @@ export default function DashboardClient({
                 value={filterCategory} 
                 onChange={(e) => setFilterCategory(e.target.value)}
                 style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+                disabled={loading}
               >
                 <option value="">All Categories</option>
                 <optgroup label="Income">
@@ -306,6 +350,7 @@ export default function DashboardClient({
                 value={filterDateStart}
                 onChange={(e) => setFilterDateStart(e.target.value)}
                 style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+                disabled={loading}
               />
             </div>
 
@@ -317,6 +362,7 @@ export default function DashboardClient({
                 value={filterDateEnd}
                 onChange={(e) => setFilterDateEnd(e.target.value)}
                 style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+                disabled={loading}
               />
             </div>
           </div>
@@ -338,7 +384,12 @@ export default function DashboardClient({
 
         {/* Transactions Feed */}
         <section className={styles.feedSection}>
-          {filteredEntries.length === 0 ? (
+          {loading ? (
+            <div className={styles.emptyFeed}>
+              <span className={styles.spinner} style={{ borderTopColor: 'var(--color-ocean-medium)', width: '32px', height: '32px' }}></span>
+              <p style={{ marginTop: '12px' }}>Connecting to Supabase Database...</p>
+            </div>
+          ) : filteredEntries.length === 0 ? (
             <div className={styles.emptyFeed}>
               <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-ocean-light)', marginBottom: '16px' }}><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
               <p>No transactions match your search filters.</p>

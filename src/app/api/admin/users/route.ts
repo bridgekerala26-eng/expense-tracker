@@ -1,31 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, isFallback } from '@/lib/db';
+import { db } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
 // Helper to authenticate request and check if user is an admin
 async function checkAdmin(req: NextRequest): Promise<{ isAdmin: boolean; errorResponse?: NextResponse }> {
-  // Get token from Authorization header or cookies
   const authHeader = req.headers.get('Authorization');
   let token = authHeader?.replace('Bearer ', '');
 
   if (!token) {
-    // Try cookie fallback
     const cookieToken = req.cookies.get('sb-access-token')?.value;
     if (cookieToken) token = cookieToken;
-  }
-
-  // Local development / Mock mode bypass
-  const fallback = await isFallback();
-  if (fallback) {
-    // In mock mode, check if the request header has a mock admin token or check mock user
-    const mockUserRole = req.headers.get('X-Mock-Role') || req.cookies.get('mock-role')?.value;
-    if (mockUserRole === 'admin') {
-      return { isAdmin: true };
-    }
-    return { 
-      isAdmin: false, 
-      errorResponse: NextResponse.json({ success: false, error: 'Unauthorized: Admin role required (mock mode)' }, { status: 401 }) 
-    };
   }
 
   if (!token) {
@@ -56,14 +40,19 @@ async function checkAdmin(req: NextRequest): Promise<{ isAdmin: boolean; errorRe
 
     return { isAdmin: true };
   } catch (err: any) {
+    // Catch database connection issues (e.g. IPv6 locally)
     return { 
       isAdmin: false, 
-      errorResponse: NextResponse.json({ success: false, error: 'Internal server check failed', details: err.message }, { status: 500 }) 
+      errorResponse: NextResponse.json({ 
+        success: false, 
+        error: 'Database connection failed. User administration commands must be run from a supported network environment (such as production).', 
+        details: err.message 
+      }, { status: 503 }) 
     };
   }
 }
 
-// GET: List all users (excluding sensitive details like passwords)
+// GET: List all users
 export async function GET(req: NextRequest) {
   const { isAdmin, errorResponse } = await checkAdmin(req);
   if (!isAdmin) return errorResponse!;
@@ -72,7 +61,11 @@ export async function GET(req: NextRequest) {
     const profiles = await db.getProfiles();
     return NextResponse.json({ success: true, users: profiles });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to retrieve users. Ensure database connectivity is established.', 
+      details: err.message 
+    }, { status: 500 });
   }
 }
 
@@ -86,13 +79,6 @@ export async function POST(req: NextRequest) {
 
     if (!name || !email || !password) {
       return NextResponse.json({ success: false, error: 'Name, email, and password are required' }, { status: 400 });
-    }
-
-    const fallback = await isFallback();
-    if (fallback) {
-      // Create user in mock database
-      const profile = await db.createProfile('', name, email, 'user');
-      return NextResponse.json({ success: true, message: 'User created in Mock Mode', user: profile });
     }
 
     // Direct Database User Insertion
@@ -177,12 +163,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'User created successfully',
+      message: 'User created successfully in database',
       user: profile
     });
   } catch (err: any) {
     console.error('Error creating user:', err);
-    return NextResponse.json({ success: false, error: 'Failed to create user', details: err.message }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to create user. Ensure database connectivity is established.', 
+      details: err.message 
+    }, { status: 500 });
   }
 }
 
@@ -207,6 +197,10 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: true, message: 'User deleted successfully' });
   } catch (err: any) {
     console.error('Error deleting user:', err);
-    return NextResponse.json({ success: false, error: 'Failed to delete user', details: err.message }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Failed to delete user. Ensure database connectivity is established.', 
+      details: err.message 
+    }, { status: 500 });
   }
 }

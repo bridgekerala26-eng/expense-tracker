@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import styles from './admin.module.css';
 
 interface Profile {
@@ -13,19 +14,16 @@ interface Profile {
 }
 
 interface AdminClientProps {
-  initialUsers: Profile[];
-  systemMode: string;
   currentUserId: string;
   currentUserName: string;
 }
 
 export default function AdminClient({
-  initialUsers,
-  systemMode,
   currentUserId,
   currentUserName,
 }: AdminClientProps) {
-  const [users, setUsers] = useState<Profile[]>(initialUsers);
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
   
   // Form State
   const [name, setName] = useState('');
@@ -39,6 +37,28 @@ export default function AdminClient({
   const [exporting, setExporting] = useState(false);
   
   const router = useRouter();
+
+  // Load user directory directly from Supabase via HTTPS
+  useEffect(() => {
+    async function loadUsers() {
+      setLoadingUsers(true);
+      try {
+        const { data, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (profilesError) throw new Error(profilesError.message);
+        setUsers(data || []);
+      } catch (err: any) {
+        console.error('Error loading users:', err);
+        setError(`Failed to retrieve user directory from Supabase: ${err.message}`);
+      } finally {
+        setLoadingUsers(false);
+      }
+    }
+    loadUsers();
+  }, []);
 
   // Handle Create User
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -54,17 +74,11 @@ export default function AdminClient({
     }
 
     try {
-      // In mock mode we pass custom header so mock api knows we are admin
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (systemMode.includes('Mock')) {
-        headers['X-Mock-Role'] = 'admin';
-      }
-
       const response = await fetch('/api/admin/users', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ name, email, password }),
       });
 
@@ -75,7 +89,7 @@ export default function AdminClient({
       }
 
       // Add newly created user profile to state
-      setUsers([...users, data.user]);
+      setUsers([...users, data.user].sort((a, b) => a.name.localeCompare(b.name)));
       setSuccess(`User "${name}" created successfully!`);
       
       // Clear inputs
@@ -100,14 +114,8 @@ export default function AdminClient({
     if (!confirmDelete) return;
 
     try {
-      const headers: Record<string, string> = {};
-      if (systemMode.includes('Mock')) {
-        headers['X-Mock-Role'] = 'admin';
-      }
-
       const response = await fetch(`/api/admin/users?id=${userId}`, {
         method: 'DELETE',
-        headers,
       });
 
       const data = await response.json();
@@ -144,12 +152,12 @@ export default function AdminClient({
         throw new Error('No entries found to export.');
       }
 
-      // 1. Generate CSV Headers
+      // Generate CSV Headers
       const headers = ['Transaction ID', 'Date', 'Type', 'Category', 'Creator/User', 'Amount (INR)', 'Description'];
       
-      // 2. Generate CSV Rows
+      // Generate CSV Rows
       const csvRows = [
-        headers.join(','), // header row
+        headers.join(','), 
         ...entries.map((e: any) => {
           return [
             JSON.stringify(e.id),
@@ -165,7 +173,7 @@ export default function AdminClient({
 
       const csvContent = csvRows.join('\n');
       
-      // 3. Trigger Download
+      // Trigger Download
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -200,29 +208,26 @@ export default function AdminClient({
       <main className="container" style={{ paddingBottom: '60px' }}>
         <div className={styles.adminTitleRow}>
           <h2>Admin Control Panel</h2>
-          <div className={styles.modeIndicator}>
-            Mode: <span className={systemMode.includes('Mock') ? styles.mockMode : styles.dbMode}>{systemMode}</span>
-          </div>
         </div>
 
         {error && (
           <div className="alert alert-error">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-            {error}
+            <span>{error}</span>
           </div>
         )}
 
         {success && (
           <div className="alert alert-success">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            {success}
+            <span>{success}</span>
           </div>
         )}
 
         {/* User Registration Form */}
         <section className={`${styles.adminCard} glass-card`}>
           <h3>Create New User Account</h3>
-          <p className={styles.cardSubtitle}>Register a user to let them add transactions and view the feed.</p>
+          <p className={styles.cardSubtitle}>Register a user to let them add transactions and view the feed. Note: user administration requires database connection.</p>
           
           <form onSubmit={handleCreateUser} className={styles.form}>
             <div className={styles.formGrid}>
@@ -302,7 +307,9 @@ export default function AdminClient({
           <p className={styles.cardSubtitle} style={{ marginBottom: '20px' }}>Active users permitted to write transactions. Delete profiles if needed.</p>
 
           <div className={styles.userList}>
-            {users.length === 0 ? (
+            {loadingUsers ? (
+              <p className={styles.noUsers}>Loading user directory from Supabase...</p>
+            ) : users.length === 0 ? (
               <p className={styles.noUsers}>No registered users in the database.</p>
             ) : (
               users.map((u) => (
@@ -321,7 +328,7 @@ export default function AdminClient({
                     onClick={() => handleDeleteUser(u.id, u.name)}
                     className="btn btn-danger"
                     style={{ padding: '8px 12px', fontSize: '0.8rem' }}
-                    disabled={u.id === currentUserId} // Admin cannot delete themselves
+                    disabled={u.id === currentUserId} 
                     title={u.id === currentUserId ? 'You cannot delete yourself' : 'Delete user'}
                   >
                     Delete User
