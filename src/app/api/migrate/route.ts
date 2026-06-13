@@ -18,14 +18,15 @@ export async function GET() {
     // 2. Create public.entries table
     await db.rawQuery(`
       CREATE TABLE IF NOT EXISTS public.entries (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
-        type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
-        amount NUMERIC(12, 2) NOT NULL,
-        category TEXT NOT NULL,
-        description TEXT,
-        date DATE NOT NULL DEFAULT CURRENT_DATE,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        id uuid default gen_random_uuid() primary key,
+        user_id uuid references auth.users(id),
+        user_name text,
+        type text check (type in ('expense', 'income')),
+        amount numeric not null,
+        category text,
+        description text,
+        date date,
+        created_at timestamp default now()
       );
     `);
 

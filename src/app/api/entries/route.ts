@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const { data: entriesData, error: entriesError } = await supabase
       .from('entries')
-      .select('*, users(name)')
+      .select('*')
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
 
@@ -16,7 +16,7 @@ export async function GET() {
     const mapped = (entriesData || []).map((e: any) => ({
       id: e.id,
       user_id: e.user_id,
-      user_name: e.users?.name || 'Unknown User',
+      user_name: e.user_name || 'Unknown User',
       amount: parseFloat(e.amount),
       type: e.type,
       category: e.category,
@@ -60,18 +60,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Amount must be a valid positive number' }, { status: 400 });
     }
 
+    const userName = req.cookies.get('sb-user-name')?.value || user.email?.split('@')[0] || 'Unknown User';
+
     // Insert into Supabase database via HTTP REST
     const { data: insertedData, error: insertError } = await supabase
       .from('entries')
       .insert({
         user_id: user.id,
+        user_name: userName,
         amount: parsedAmount,
         type,
         category,
         description: description || '',
         date
       })
-      .select('*, users(name)');
+      .select('*');
 
     if (insertError) throw new Error(insertError.message);
     if (!insertedData || insertedData.length === 0) throw new Error('Transaction could not be saved.');
@@ -79,7 +82,7 @@ export async function POST(req: NextRequest) {
     const newEntry = {
       id: insertedData[0].id,
       user_id: insertedData[0].user_id,
-      user_name: insertedData[0].users?.name || user.email?.split('@')[0] || 'Unknown User',
+      user_name: insertedData[0].user_name || userName,
       amount: parseFloat(insertedData[0].amount),
       type: insertedData[0].type,
       category: insertedData[0].category,

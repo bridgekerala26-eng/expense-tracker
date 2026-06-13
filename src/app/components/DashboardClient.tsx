@@ -75,10 +75,10 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
         if (usersError) throw new Error(usersError.message);
         setProfiles(usersData || []);
 
-        // 2. Fetch Entries joined with users table
+        // 2. Fetch Entries from entries table
         const { data: entriesData, error: entriesError } = await supabase
           .from('entries')
-          .select('*, users(name)')
+          .select('*')
           .order('date', { ascending: false })
           .order('created_at', { ascending: false });
 
@@ -88,7 +88,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
         const mapped: Entry[] = (entriesData || []).map((e: any) => ({
           id: e.id,
           user_id: e.user_id,
-          user_name: e.users?.name || 'Unknown User',
+          user_name: e.user_name || 'Unknown User',
           amount: parseFloat(e.amount),
           type: e.type,
           category: e.category,
@@ -133,18 +133,19 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
     }
 
     try {
-      // Insert new entry in Supabase and fetch creator name
+      // Insert new entry in Supabase and fetch inserted row
       const { data: insertedData, error: insertError } = await supabase
         .from('entries')
         .insert({
           user_id: currentUser.id,
+          user_name: currentUser.name,
           amount: parseFloat(amount),
           type: entryType,
           category,
           description,
           date,
         })
-        .select('*, users(name)');
+        .select('*');
 
       if (insertError) throw new Error(insertError.message);
       if (!insertedData || insertedData.length === 0) throw new Error('Transaction could not be saved.');
@@ -152,7 +153,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
       const mappedNewEntry: Entry = {
         id: insertedData[0].id,
         user_id: insertedData[0].user_id,
-        user_name: insertedData[0].users?.name || currentUser.name,
+        user_name: insertedData[0].user_name || currentUser.name,
         amount: parseFloat(insertedData[0].amount),
         type: insertedData[0].type,
         category: insertedData[0].category,
