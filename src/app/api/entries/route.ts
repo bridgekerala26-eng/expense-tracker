@@ -46,6 +46,9 @@ export async function POST(req: NextRequest) {
     let user = null;
     if (token === 'admin-hardcoded-bypass-token') {
       user = { id: cookieUserId, email: 'admin@gmail.com' };
+    } else if (token && token.startsWith('user-bypass-token-')) {
+      const userEmail = req.cookies.get('sb-user-email')?.value || '';
+      user = { id: cookieUserId, email: userEmail };
     } else {
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
       if (authError || !authUser || authUser.id !== cookieUserId) {

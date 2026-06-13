@@ -49,6 +49,15 @@ export default function LoginPage() {
         throw new Error(data.error || 'Authentication failed. Please check credentials.');
       }
 
+      // Login successful, store session in localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user-session', JSON.stringify({
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role
+        }));
+      }
+
       // Login successful, redirect to dashboard
       router.push('/');
       router.refresh();

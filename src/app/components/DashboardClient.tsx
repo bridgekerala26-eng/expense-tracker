@@ -152,6 +152,9 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user-session');
+      }
       router.push('/login');
       router.refresh();
     } catch (err) {

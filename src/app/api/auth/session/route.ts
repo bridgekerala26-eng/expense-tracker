@@ -28,6 +28,22 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Bypass Supabase validation for plain-text logged in users
+    if (token && token.startsWith('user-bypass-token-')) {
+      const userEmail = req.cookies.get('sb-user-email')?.value || '';
+      return NextResponse.json({
+        success: true,
+        authenticated: true,
+        mode: 'Database Mode',
+        user: {
+          id: userId,
+          name: userName || 'Authenticated User',
+          role: userRole || 'Member',
+          email: userEmail
+        }
+      });
+    }
+
     // Verify token with Supabase Auth
     const { data: { user }, error } = await supabase.auth.getUser(token);
     
