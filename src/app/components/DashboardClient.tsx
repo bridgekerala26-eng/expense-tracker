@@ -9,7 +9,6 @@ interface Profile {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
 }
 
 interface Entry {
@@ -61,25 +60,25 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
   
   const router = useRouter();
 
-  // Load entries and profiles directly from Supabase via HTTPS
+  // Load entries and users directly from Supabase via HTTPS
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
       setError('');
       try {
-        // 1. Fetch Profiles
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('profiles')
+        // 1. Fetch Users directory from public.users table
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
           .select('*')
           .order('name', { ascending: true });
 
-        if (profilesError) throw new Error(profilesError.message);
-        setProfiles(profilesData || []);
+        if (usersError) throw new Error(usersError.message);
+        setProfiles(usersData || []);
 
-        // 2. Fetch Entries joined with profiles
+        // 2. Fetch Entries joined with users table
         const { data: entriesData, error: entriesError } = await supabase
           .from('entries')
-          .select('*, profiles(name)')
+          .select('*, users(name)')
           .order('date', { ascending: false })
           .order('created_at', { ascending: false });
 
@@ -89,7 +88,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
         const mapped: Entry[] = (entriesData || []).map((e: any) => ({
           id: e.id,
           user_id: e.user_id,
-          user_name: e.profiles?.name || 'Unknown User',
+          user_name: e.users?.name || 'Unknown User',
           amount: parseFloat(e.amount),
           type: e.type,
           category: e.category,
@@ -134,7 +133,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
     }
 
     try {
-      // Insert new entry in Supabase
+      // Insert new entry in Supabase and fetch creator name
       const { data: insertedData, error: insertError } = await supabase
         .from('entries')
         .insert({
@@ -145,7 +144,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
           description,
           date,
         })
-        .select('*, profiles(name)');
+        .select('*, users(name)');
 
       if (insertError) throw new Error(insertError.message);
       if (!insertedData || insertedData.length === 0) throw new Error('Transaction could not be saved.');
@@ -153,7 +152,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
       const mappedNewEntry: Entry = {
         id: insertedData[0].id,
         user_id: insertedData[0].user_id,
-        user_name: insertedData[0].profiles?.name || currentUser.name,
+        user_name: insertedData[0].users?.name || currentUser.name,
         amount: parseFloat(insertedData[0].amount),
         type: insertedData[0].type,
         category: insertedData[0].category,

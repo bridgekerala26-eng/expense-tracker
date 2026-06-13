@@ -20,18 +20,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: authError?.message || 'Invalid login credentials' }, { status: 400 });
     }
 
-    // Fetch profile details (role and name) from public.profiles table
-    const profileRes = await db.rawQuery('SELECT name, role FROM profiles WHERE id = $1', [authData.user.id]);
+    // Fetch user details from public.users table
+    const userRes = await db.rawQuery('SELECT name FROM users WHERE id = $1', [authData.user.id]);
     
     let name = email.split('@')[0];
-    let role: 'admin' | 'user' = email.toLowerCase() === 'admin@gmail.com' ? 'admin' : 'user';
+    const role = email.toLowerCase() === 'admin@gmail.com' ? 'admin' : 'user';
 
-    if (profileRes.rows.length === 0) {
-      // If profile is missing (first time signing in or manual creation), create one
-      await db.createProfile(authData.user.id, name, email, role);
+    if (userRes.rows.length === 0) {
+      // If user metadata is missing, create it in public.users
+      await db.createProfile(authData.user.id, name, email);
     } else {
-      name = profileRes.rows[0].name;
-      role = profileRes.rows[0].role;
+      name = userRes.rows[0].name;
     }
 
     const response = NextResponse.json({

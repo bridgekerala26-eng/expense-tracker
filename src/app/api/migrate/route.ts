@@ -5,25 +5,23 @@ export async function GET() {
   try {
     console.log('Running database migrations directly on Supabase...');
 
-    // 1. Create tables
-    // Create Profiles table in public schema referencing auth.users
+    // 1. Create public.users table
     await db.rawQuery(`
-      CREATE TABLE IF NOT EXISTS public.profiles (
+      CREATE TABLE IF NOT EXISTS public.users (
         id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
-        role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+        name TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
     `);
 
-    // Create Entries table for expenses/income
+    // 2. Create public.entries table
     await db.rawQuery(`
       CREATE TABLE IF NOT EXISTS public.entries (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-        amount NUMERIC(12, 2) NOT NULL,
+        user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
         type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+        amount NUMERIC(12, 2) NOT NULL,
         category TEXT NOT NULL,
         description TEXT,
         date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -31,11 +29,11 @@ export async function GET() {
       );
     `);
 
-    // Disable RLS on public tables to allow shared access from all authenticated users
-    await db.rawQuery('ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;');
+    // Disable Row Level Security (RLS) to ensure shared feed visibility
+    await db.rawQuery('ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;');
     await db.rawQuery('ALTER TABLE public.entries DISABLE ROW LEVEL SECURITY;');
 
-    // 2. Seed Admin User
+    // 3. Seed Admin User
     const adminEmail = 'admin@gmail.com';
     
     // Check if admin user already exists in auth.users
@@ -122,17 +120,17 @@ export async function GET() {
       console.log(`Admin user already exists in auth.users (ID: ${adminUserId})`);
     }
 
-    // Upsert admin profile in public.profiles table
+    // Upsert admin profile in public.users table
     await db.rawQuery(`
-      INSERT INTO public.profiles (id, name, email, role)
-      VALUES ($1, 'Bridge Admin', $2, 'admin')
+      INSERT INTO public.users (id, name, email)
+      VALUES ($1, 'Bridge Admin', $2)
       ON CONFLICT (id) DO UPDATE 
-      SET role = 'admin', name = 'Bridge Admin'
+      SET name = 'Bridge Admin'
     `, [adminUserId, adminEmail]);
 
     return NextResponse.json({
       success: true,
-      message: 'Migrations and seeding executed successfully directly in Supabase!',
+      message: 'Migrations and admin seeding executed successfully directly in Supabase!',
       adminId: adminUserId
     });
   } catch (err: any) {

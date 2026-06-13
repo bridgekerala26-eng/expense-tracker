@@ -9,31 +9,24 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState('');
   const router = useRouter();
 
-  // Check database connection mode on load
+  // Check session status on mount
   useEffect(() => {
-    async function checkMode() {
+    async function checkSession() {
       try {
         const res = await fetch('/api/auth/session');
         const data = await res.json();
         
-        // If already authenticated, redirect to home
+        // If already authenticated, redirect to dashboard
         if (data.authenticated) {
           router.push('/');
-          return;
         }
-
-        // Fetch db status
-        const statusRes = await fetch('/api/entries/status');
-        const statusData = await statusRes.json();
-        setMode(statusData.mode);
       } catch (err) {
-        console.error('Error checking status:', err);
+        console.error('Error checking session:', err);
       }
     }
-    checkMode();
+    checkSession();
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,7 +51,7 @@ export default function LoginPage() {
 
       // Login successful, redirect to dashboard
       router.push('/');
-      router.refresh(); // refresh server components
+      router.refresh();
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
@@ -68,7 +61,6 @@ export default function LoginPage() {
   return (
     <div className={styles.loginContainer}>
       <div className={`${styles.loginCard} glass-card`}>
-        {/* Beach themed brand header */}
         <div className={styles.header}>
           <div className={styles.logo}>
             Bridge<span>Kerala</span>
@@ -130,11 +122,6 @@ export default function LoginPage() {
 
         <div className={styles.footer}>
           <p>Admin: <code>admin@gmail.com</code> / <code>bridge.kl</code></p>
-          {mode && (
-            <div className={styles.modeIndicator}>
-              System Mode: <span className={mode.includes('Mock') ? styles.mockMode : styles.dbMode}>{mode}</span>
-            </div>
-          )}
         </div>
       </div>
     </div>

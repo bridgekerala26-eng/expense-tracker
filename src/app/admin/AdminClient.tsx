@@ -10,7 +10,6 @@ interface Profile {
   name: string;
   email: string;
   role: 'admin' | 'user';
-  created_at?: string;
 }
 
 interface AdminClientProps {
@@ -43,13 +42,22 @@ export default function AdminClient({
     async function loadUsers() {
       setLoadingUsers(true);
       try {
-        const { data, error: profilesError } = await supabase
-          .from('profiles')
+        const { data, error: usersError } = await supabase
+          .from('users')
           .select('*')
           .order('name', { ascending: true });
 
-        if (profilesError) throw new Error(profilesError.message);
-        setUsers(data || []);
+        if (usersError) throw new Error(usersError.message);
+
+        // Map users to simulate role output based on email
+        const mapped: Profile[] = (data || []).map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.email.toLowerCase() === 'admin@gmail.com' ? 'admin' : 'user'
+        }));
+
+        setUsers(mapped);
       } catch (err: any) {
         console.error('Error loading users:', err);
         setError(`Failed to retrieve user directory from Supabase: ${err.message}`);

@@ -29,9 +29,8 @@ async function checkAdmin(req: NextRequest): Promise<{ isAdmin: boolean; errorRe
       };
     }
 
-    // Check user role in public.profiles table
-    const profiles = await db.rawQuery('SELECT role FROM profiles WHERE id = $1', [user.id]);
-    if (profiles.rows.length === 0 || profiles.rows[0].role !== 'admin') {
+    // Check if user's email is admin@gmail.com
+    if (user.email?.toLowerCase() !== 'admin@gmail.com') {
       return { 
         isAdmin: false, 
         errorResponse: NextResponse.json({ success: false, error: 'Forbidden: Admin privileges required' }, { status: 403 }) 
@@ -40,7 +39,6 @@ async function checkAdmin(req: NextRequest): Promise<{ isAdmin: boolean; errorRe
 
     return { isAdmin: true };
   } catch (err: any) {
-    // Catch database connection issues (e.g. IPv6 locally)
     return { 
       isAdmin: false, 
       errorResponse: NextResponse.json({ 
@@ -58,8 +56,13 @@ export async function GET(req: NextRequest) {
   if (!isAdmin) return errorResponse!;
 
   try {
-    const profiles = await db.getProfiles();
-    return NextResponse.json({ success: true, users: profiles });
+    const usersList = await db.getProfiles(); // gets profiles (users)
+    // Map list to simulate role output based on email
+    const usersWithRoles = usersList.map((u: any) => ({
+      ...u,
+      role: u.email.toLowerCase() === 'admin@gmail.com' ? 'admin' : 'user'
+    }));
+    return NextResponse.json({ success: true, users: usersWithRoles });
   } catch (err: any) {
     return NextResponse.json({ 
       success: false, 
@@ -158,13 +161,16 @@ export async function POST(req: NextRequest) {
       )
     `, [newUserId, email]);
 
-    // 5. Insert profile in public.profiles table
-    const profile = await db.createProfile(newUserId, name, email, 'user');
+    // 5. Insert profile in public.users table
+    const profile = await db.createProfile(newUserId, name, email);
 
     return NextResponse.json({
       success: true,
       message: 'User created successfully in database',
-      user: profile
+      user: {
+        ...profile,
+        role: 'user'
+      }
     });
   } catch (err: any) {
     console.error('Error creating user:', err);

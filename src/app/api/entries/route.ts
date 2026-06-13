@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const { data: entriesData, error: entriesError } = await supabase
       .from('entries')
-      .select('*, profiles(name)')
+      .select('*, users(name)')
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
 
@@ -16,7 +16,7 @@ export async function GET() {
     const mapped = (entriesData || []).map((e: any) => ({
       id: e.id,
       user_id: e.user_id,
-      user_name: e.profiles?.name || 'Unknown User',
+      user_name: e.users?.name || 'Unknown User',
       amount: parseFloat(e.amount),
       type: e.type,
       category: e.category,
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
         description: description || '',
         date
       })
-      .select('*, profiles(name)');
+      .select('*, users(name)');
 
     if (insertError) throw new Error(insertError.message);
     if (!insertedData || insertedData.length === 0) throw new Error('Transaction could not be saved.');
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     const newEntry = {
       id: insertedData[0].id,
       user_id: insertedData[0].user_id,
-      user_name: insertedData[0].profiles?.name || user.email?.split('@')[0] || 'Unknown User',
+      user_name: insertedData[0].users?.name || user.email?.split('@')[0] || 'Unknown User',
       amount: parseFloat(insertedData[0].amount),
       type: insertedData[0].type,
       category: insertedData[0].category,
