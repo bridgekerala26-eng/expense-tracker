@@ -9,12 +9,13 @@ interface Profile {
   id: string;
   name: string;
   email: string;
+  role?: string;
 }
 
 interface Entry {
   id: string;
-  user_id: string | null;
   user_name: string;
+  user_email: string;
   amount: number;
   type: 'income' | 'expense';
   category: string;
@@ -80,7 +81,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
   };
 
   const handleDeleteEntry = async (entryId: string) => {
-    const confirmDelete = window.confirm('Are you sure you want to delete this transaction?');
+    const confirmDelete = window.confirm('Are you sure?');
     if (!confirmDelete) return;
 
     try {
@@ -127,8 +128,8 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
         // Map entries to flatten user_name
         const mapped: Entry[] = (entriesData || []).map((e: any) => ({
           id: e.id,
-          user_id: e.user_id,
           user_name: e.user_name || 'Unknown User',
+          user_email: e.user_email || '',
           amount: parseFloat(e.amount),
           type: e.type,
           category: e.category,
@@ -195,8 +196,8 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
 
         const updatedEntry: Entry = {
           id: updatedData[0].id,
-          user_id: updatedData[0].user_id,
           user_name: updatedData[0].user_name || currentUser.name,
+          user_email: updatedData[0].user_email || currentUser.email || '',
           amount: parseFloat(updatedData[0].amount),
           type: updatedData[0].type,
           category: updatedData[0].category,
@@ -213,8 +214,8 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
         const { data: insertedData, error: insertError } = await supabase
           .from('entries')
           .insert({
-            user_id: currentUser.id,
             user_name: currentUser.name,
+            user_email: currentUser.email,
             amount: parseFloat(amount),
             type: entryType,
             category,
@@ -228,8 +229,8 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
 
         const mappedNewEntry: Entry = {
           id: insertedData[0].id,
-          user_id: insertedData[0].user_id,
           user_name: insertedData[0].user_name || currentUser.name,
+          user_email: insertedData[0].user_email || currentUser.email || '',
           amount: parseFloat(insertedData[0].amount),
           type: insertedData[0].type,
           category: insertedData[0].category,
@@ -268,7 +269,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
 
   // Filter Logic
   const filteredEntries = entries.filter((e) => {
-    if (filterUser && e.user_id !== filterUser) return false;
+    if (filterUser && e.user_email !== filterUser) return false;
     if (filterCategory && e.category !== filterCategory) return false;
     if (filterDateStart && e.date < filterDateStart) return false;
     if (filterDateEnd && e.date > filterDateEnd) return false;
@@ -398,7 +399,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
               >
                 <option value="">All Users</option>
                 {profiles.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.email}>{p.name}</option>
                 ))}
               </select>
             </div>
@@ -497,7 +498,7 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
                       </span>
                     </div>
                     {e.description && <p className={styles.entryDesc}>{e.description}</p>}
-                    {e.user_id === currentUser.id && (
+                    {(currentUser.role === 'admin' || (currentUser.email && e.user_email === currentUser.email)) && (
                       <div className={styles.entryActions}>
                         <button onClick={() => handleStartEdit(e)} className={styles.actionBtnEdit}>
                           Edit

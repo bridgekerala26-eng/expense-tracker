@@ -30,8 +30,8 @@ export async function GET() {
     await db.rawQuery(`
       CREATE TABLE IF NOT EXISTS public.entries (
         id uuid default gen_random_uuid() primary key,
-        user_id uuid,
         user_name text,
+        user_email text,
         type text check (type in ('expense', 'income')),
         amount numeric not null,
         category text,
@@ -42,7 +42,8 @@ export async function GET() {
     `);
 
     try {
-      await db.rawQuery(`ALTER TABLE public.entries DROP CONSTRAINT IF EXISTS entries_user_id_fkey;`);
+      await db.rawQuery(`ALTER TABLE public.entries ADD COLUMN IF NOT EXISTS user_email TEXT;`);
+      await db.rawQuery(`ALTER TABLE public.entries DROP COLUMN IF EXISTS user_id;`);
     } catch (e: any) {
       console.log('Adjust entries table warning (ignored):', e.message);
     }

@@ -15,8 +15,8 @@ export async function GET() {
     // Map entries to flatten user_name
     const mapped = (entriesData || []).map((e: any) => ({
       id: e.id,
-      user_id: e.user_id,
       user_name: e.user_name || 'Unknown User',
+      user_email: e.user_email || '',
       amount: parseFloat(e.amount),
       type: e.type,
       category: e.category,
@@ -69,14 +69,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Amount must be a valid positive number' }, { status: 400 });
     }
 
-    const userName = req.cookies.get('sb-user-name')?.value || user.email?.split('@')[0] || 'Unknown User';
+    const userEmail = user.email || req.cookies.get('sb-user-email')?.value || '';
+    const userName = req.cookies.get('sb-user-name')?.value || userEmail.split('@')[0] || 'Unknown User';
 
     // Insert into Supabase database via HTTP REST
     const { data: insertedData, error: insertError } = await supabase
       .from('entries')
       .insert({
-        user_id: user.id,
         user_name: userName,
+        user_email: userEmail,
         amount: parsedAmount,
         type,
         category,
@@ -90,8 +91,8 @@ export async function POST(req: NextRequest) {
 
     const newEntry = {
       id: insertedData[0].id,
-      user_id: insertedData[0].user_id,
       user_name: insertedData[0].user_name || userName,
+      user_email: insertedData[0].user_email || userEmail,
       amount: parseFloat(insertedData[0].amount),
       type: insertedData[0].type,
       category: insertedData[0].category,

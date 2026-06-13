@@ -10,6 +10,7 @@ export default async function HomePage() {
   const userId = cookieStore.get('sb-user-id')?.value;
   const userRole = cookieStore.get('sb-user-role')?.value as 'admin' | 'Member' | 'Viewer';
   const userName = cookieStore.get('sb-user-name')?.value;
+  const userEmail = cookieStore.get('sb-user-email')?.value;
 
   // Server-side redirect if not authenticated
   if (!token || !userId) {
@@ -24,6 +25,7 @@ export default async function HomePage() {
         id: userId,
         name: userName || 'Authenticated User',
         role: userRole || 'user',
+        email: userEmail || '',
       }}
     />
   );
