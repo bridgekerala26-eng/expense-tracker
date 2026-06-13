@@ -16,10 +16,17 @@ export default function LoginPage() {
     async function checkSession() {
       try {
         const res = await fetch('/api/auth/session');
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
         
         // If already authenticated, redirect to dashboard
-        if (data.authenticated) {
+        if (data && data.authenticated) {
+          if (typeof window !== 'undefined' && data.user) {
+            localStorage.setItem('user-session', JSON.stringify({
+              name: data.user.name,
+              email: data.user.email,
+              role: data.user.role
+            }));
+          }
           router.push('/');
         }
       } catch (err) {

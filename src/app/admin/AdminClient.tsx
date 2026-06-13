@@ -15,14 +15,27 @@ interface Profile {
 interface AdminClientProps {
   currentUserId: string;
   currentUserName: string;
+  currentUserEmail: string;
 }
 
 export default function AdminClient({
   currentUserId,
   currentUserName,
+  currentUserEmail,
 }: AdminClientProps) {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+
+  // Sync localStorage session if missing
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !localStorage.getItem('user-session')) {
+      localStorage.setItem('user-session', JSON.stringify({
+        name: currentUserName,
+        email: currentUserEmail,
+        role: 'admin'
+      }));
+    }
+  }, [currentUserName, currentUserEmail]);
   
   // Form State
   const [name, setName] = useState('');

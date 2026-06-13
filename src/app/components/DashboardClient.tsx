@@ -101,6 +101,17 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
 
   const router = useRouter();
 
+  // Sync localStorage session if missing
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !localStorage.getItem('user-session') && currentUser) {
+      localStorage.setItem('user-session', JSON.stringify({
+        name: currentUser.name,
+        email: currentUser.email || '',
+        role: currentUser.role
+      }));
+    }
+  }, [currentUser]);
+
   // Load entries and users directly from Supabase via HTTPS
   useEffect(() => {
     async function fetchData() {

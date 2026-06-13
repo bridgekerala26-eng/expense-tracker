@@ -11,6 +11,8 @@ export default async function AdminPage() {
   const userRole = cookieStore.get('sb-user-role')?.value;
   const userName = cookieStore.get('sb-user-name')?.value;
 
+  const userEmail = cookieStore.get('sb-user-email')?.value;
+
   // 1. Auth & Admin Role Check
   if (!token || !userId) {
     redirect('/login');
@@ -25,6 +27,7 @@ export default async function AdminPage() {
     <AdminClient
       currentUserId={userId}
       currentUserName={userName || 'Admin'}
+      currentUserEmail={userEmail || 'admin@gmail.com'}
     />
   );
 }
