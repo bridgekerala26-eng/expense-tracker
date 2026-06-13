@@ -91,10 +91,17 @@ export default function AdminClient({
         body: JSON.stringify({ name, email, password, role }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to create user.');
+      if (!response.ok || !data || !data.success) {
+        let errorMessage = 'Failed to create user.';
+        if (data && data.error) {
+          errorMessage = data.error;
+          if (data.details) {
+            errorMessage += ` (Details: ${typeof data.details === 'object' ? JSON.stringify(data.details) : data.details})`;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       // Add newly created user profile to state

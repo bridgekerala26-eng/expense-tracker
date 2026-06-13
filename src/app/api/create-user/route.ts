@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 // Helper to authenticate request and check if user is an admin
 async function checkAdmin(req: NextRequest): Promise<{ isAdmin: boolean; errorResponse?: NextResponse }> {
@@ -55,8 +55,22 @@ export async function POST(req: NextRequest) {
 
     const cleanRole = (role === 'Member' || role === 'Viewer') ? role : 'Member';
 
-    // Initialize the Admin client using the SUPABASE_SERVICE_ROLE_KEY
-    const supabaseAdmin = getSupabaseAdmin();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://zpbsmlwzgkictcpzzewr.supabase.co';
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SERVICE_ROLE_KEY;
+
+    if (!serviceRoleKey) {
+      const errorMsg = 'SUPABASE_SERVICE_ROLE_KEY environment variable is not defined on the server.';
+      console.error(errorMsg);
+      return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
+    }
+
+    // Initialize a NEW Supabase client using createClient with service role key
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      }
+    });
 
     // 1. Check if user already exists
     const { data: existingUser, error: checkError } = await supabaseAdmin
@@ -64,7 +78,11 @@ export async function POST(req: NextRequest) {
       .select('id')
       .eq('email', email.toLowerCase());
 
-    if (checkError) throw new Error(checkError.message);
+    if (checkError) {
+      console.error('Error checking user existence:', checkError);
+      return NextResponse.json({ success: false, error: `Failed to verify user existence: ${checkError.message}`, details: checkError }, { status: 500 });
+    }
+
     if (existingUser && existingUser.length > 0) {
       return NextResponse.json({ success: false, error: 'User with this email already exists' }, { status: 400 });
     }
@@ -84,8 +102,20 @@ export async function POST(req: NextRequest) {
       })
       .select('*');
 
-    if (insertError) throw new Error(insertError.message);
-    if (!insertedUser || insertedUser.length === 0) throw new Error('Failed to save user in database.');
+    if (insertError) {
+      console.error('CRITICAL: Supabase user insert failed! Error details:', insertError);
+      return NextResponse.json({ 
+        success: false, 
+        error: `Supabase insert failed: ${insertError.message} (Code: ${insertError.code || 'unknown'})`, 
+        details: insertError 
+      }, { status: 500 });
+    }
+
+    if (!insertedUser || insertedUser.length === 0) {
+      const emptyErrorMsg = 'Failed to save user: insert succeeded but returned no rows.';
+      console.error(emptyErrorMsg);
+      return NextResponse.json({ success: false, error: emptyErrorMsg }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
@@ -101,8 +131,8 @@ export async function POST(req: NextRequest) {
     console.error('Error creating user via service role:', err);
     return NextResponse.json({ 
       success: false, 
-      error: 'Failed to create user in database.', 
-      details: err.message 
+      error: `Internal server error: ${err.message}`, 
+      details: err.stack 
     }, { status: 500 });
   }
 }
