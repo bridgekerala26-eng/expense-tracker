@@ -8,7 +8,7 @@ export default async function HomePage() {
   const cookieStore = await cookies();
   const token = cookieStore.get('sb-access-token')?.value;
   const userId = cookieStore.get('sb-user-id')?.value;
-  const userRole = cookieStore.get('sb-user-role')?.value as 'admin' | 'user';
+  const userRole = cookieStore.get('sb-user-role')?.value as 'admin' | 'Member' | 'Viewer';
   const userName = cookieStore.get('sb-user-name')?.value;
 
   // Server-side redirect if not authenticated

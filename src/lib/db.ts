@@ -31,13 +31,13 @@ export const db = {
     return res.rows;
   },
 
-  createProfile: async (id: string, name: string, email: string) => {
+  createProfile: async (id: string, name: string, email: string, role: string = 'Member', password?: string) => {
     const p = getPool();
     const res = await p.query(
-      `INSERT INTO users (id, name, email)
-       VALUES ($1, $2, $3)
+      `INSERT INTO users (id, name, email, role, password)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [id, name, email]
+      [id, name, email, role, password || null]
     );
     return res.rows[0];
   },

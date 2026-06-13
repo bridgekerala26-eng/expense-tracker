@@ -9,7 +9,7 @@ interface Profile {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'Member' | 'Viewer';
 }
 
 interface AdminClientProps {
@@ -28,6 +28,7 @@ export default function AdminClient({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<'Member' | 'Viewer'>('Member');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -49,12 +50,12 @@ export default function AdminClient({
 
         if (usersError) throw new Error(usersError.message);
 
-        // Map users to simulate role output based on email
+        // Map users using stored roles
         const mapped: Profile[] = (data || []).map((u: any) => ({
           id: u.id,
           name: u.name,
           email: u.email,
-          role: u.email.toLowerCase() === 'admin@gmail.com' ? 'admin' : 'user'
+          role: u.role || (u.email.toLowerCase() === 'admin@gmail.com' ? 'admin' : 'Member')
         }));
 
         setUsers(mapped);
@@ -87,7 +88,7 @@ export default function AdminClient({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, role }),
       });
 
       const data = await response.json();
@@ -98,12 +99,13 @@ export default function AdminClient({
 
       // Add newly created user profile to state
       setUsers([...users, data.user].sort((a, b) => a.name.localeCompare(b.name)));
-      setSuccess(`User "${name}" created successfully!`);
+      setSuccess(`User created successfully`);
       
       // Clear inputs
       setName('');
       setEmail('');
       setPassword('');
+      setRole('Member');
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -280,6 +282,20 @@ export default function AdminClient({
                   disabled={submitting}
                 />
               </div>
+
+              <div className="form-group" style={{ marginBottom: '0' }}>
+                <label className="form-label" htmlFor="user-role">Role</label>
+                <select
+                  id="user-role"
+                  className="form-control"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as 'Member' | 'Viewer')}
+                  disabled={submitting}
+                >
+                  <option value="Member">Member</option>
+                  <option value="Viewer">Viewer</option>
+                </select>
+              </div>
             </div>
 
             <button
@@ -288,7 +304,7 @@ export default function AdminClient({
               style={{ marginTop: '20px', alignSelf: 'flex-start' }}
               disabled={submitting}
             >
-              {submitting ? 'Creating...' : 'Register User'}
+              {submitting ? 'Creating...' : 'Create User'}
             </button>
           </form>
         </section>
@@ -309,6 +325,35 @@ export default function AdminClient({
           </button>
         </section>
 
+        {/* Shareable App Link Card */}
+        <section className={`${styles.adminCard} glass-card`}>
+          <h3>Shareable App Link</h3>
+          <p className={styles.cardSubtitle}>Copy this link and send it to your team members so they can log in.</p>
+          
+          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+            <input 
+              type="text" 
+              readOnly 
+              value={typeof window !== 'undefined' ? `${window.location.origin}/login` : ''} 
+              className="form-control"
+              style={{ flex: 1, padding: '10px' }}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <button 
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  navigator.clipboard.writeText(`${window.location.origin}/login`);
+                  alert('App link copied to clipboard!');
+                }
+              }}
+              className="btn btn-accent"
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              Copy Link
+            </button>
+          </div>
+        </section>
+
         {/* User Directory List */}
         <section className={`${styles.adminCard} glass-card`}>
           <h3>Active Users Directory ({users.length})</h3>
@@ -325,7 +370,7 @@ export default function AdminClient({
                   <div className={styles.userInfoCol}>
                     <div className={styles.userNameRow}>
                       <span className={styles.userNameText}>{u.name}</span>
-                      <span className={`badge ${u.role === 'admin' ? 'badge-expense' : 'badge-income'}`} style={{ fontSize: '0.65rem' }}>
+                      <span className={`badge ${u.role === 'admin' ? 'badge-expense' : u.role === 'Viewer' ? 'badge-income' : 'badge-accent'}`} style={{ fontSize: '0.65rem' }}>
                         {u.role}
                       </span>
                     </div>

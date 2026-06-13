@@ -1,8 +1,10 @@
 -- 1. Create Users profile table in public schema
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  password TEXT,
+  role TEXT NOT NULL DEFAULT 'Member' CHECK (role IN ('Member', 'Viewer', 'admin')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

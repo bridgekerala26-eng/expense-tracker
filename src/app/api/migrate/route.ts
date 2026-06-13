@@ -9,11 +9,21 @@ export async function GET() {
     await db.rawQuery(`
       CREATE TABLE IF NOT EXISTS public.users (
         id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-        email TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        password TEXT,
+        role TEXT NOT NULL DEFAULT 'Member' CHECK (role IN ('Member', 'Viewer', 'admin')),
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
     `);
+
+    // Ensure columns exist if table was already created
+    try {
+      await db.rawQuery(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password TEXT;`);
+      await db.rawQuery(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'Member';`);
+    } catch (e: any) {
+      console.log('Alter columns warning (ignored):', e.message);
+    }
 
     // 2. Create public.entries table
     await db.rawQuery(`
@@ -123,10 +133,10 @@ export async function GET() {
 
     // Upsert admin profile in public.users table
     await db.rawQuery(`
-      INSERT INTO public.users (id, name, email)
-      VALUES ($1, 'Bridge Admin', $2)
+      INSERT INTO public.users (id, name, email, role, password)
+      VALUES ($1, 'Bridge Admin', $2, 'admin', 'bridge.kl')
       ON CONFLICT (id) DO UPDATE 
-      SET name = 'Bridge Admin'
+      SET name = 'Bridge Admin', role = 'admin', password = 'bridge.kl'
     `, [adminUserId, adminEmail]);
 
     return NextResponse.json({

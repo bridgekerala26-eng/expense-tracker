@@ -27,7 +27,7 @@ interface DashboardClientProps {
   currentUser: {
     id: string;
     name: string;
-    role: 'admin' | 'user';
+    role: 'admin' | 'Member' | 'Viewer';
     email?: string;
   };
 }
@@ -290,10 +290,16 @@ export default function DashboardClient({ currentUser }: DashboardClientProps) {
         {/* Quick Add Button & Header */}
         <section className={styles.sectionHeader}>
           <h2>Shared Feed</h2>
-          <button onClick={() => setModalOpen(true)} className="btn btn-accent" disabled={loading}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Add Entry
-          </button>
+          {currentUser.role !== 'Viewer' ? (
+            <button onClick={() => setModalOpen(true)} className="btn btn-accent" disabled={loading}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Add Entry
+            </button>
+          ) : (
+            <span className="badge badge-income" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>
+              Viewer Mode (Read-Only)
+            </span>
+          )}
         </section>
 
         {/* Filters Panel */}

@@ -62,10 +62,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const usersList = await db.getProfiles(); // gets profiles (users)
-    // Map list to simulate role output based on email
     const usersWithRoles = usersList.map((u: any) => ({
-      ...u,
-      role: u.email.toLowerCase() === 'admin@gmail.com' ? 'admin' : 'user'
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role || (u.email.toLowerCase() === 'admin@gmail.com' ? 'admin' : 'Member'),
+      created_at: u.created_at
     }));
     return NextResponse.json({ success: true, users: usersWithRoles });
   } catch (err: any) {
@@ -83,11 +85,13 @@ export async function POST(req: NextRequest) {
   if (!isAdmin) return errorResponse!;
 
   try {
-    const { name, email, password } = await req.json();
+    const { name, email, password, role } = await req.json();
 
     if (!name || !email || !password) {
       return NextResponse.json({ success: false, error: 'Name, email, and password are required' }, { status: 400 });
     }
+
+    const cleanRole = (role === 'Member' || role === 'Viewer') ? role : 'Member';
 
     // Direct Database User Insertion
     // 1. Check if user already exists in auth.users
@@ -167,14 +171,16 @@ export async function POST(req: NextRequest) {
     `, [newUserId, email]);
 
     // 5. Insert profile in public.users table
-    const profile = await db.createProfile(newUserId, name, email);
+    const profile = await db.createProfile(newUserId, name, email, cleanRole, password);
 
     return NextResponse.json({
       success: true,
       message: 'User created successfully in database',
       user: {
-        ...profile,
-        role: 'user'
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        role: cleanRole
       }
     });
   } catch (err: any) {
